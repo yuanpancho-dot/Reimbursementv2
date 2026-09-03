@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#EAE6DC" />
+<title>Ledger — Reimbursements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --paper: #EAE6DC;
+    --paper-light: #F5F3EC;
+    --card: #FFFFFF;
+    --ink: #22281F;
+    --ink-soft: #5B6156;
+    --line: #D9D4C6;
+    --forest: #2C5F4A;
+    --forest-dark: #1E4433;
+    --stamp: #A8382C;
+    --stamp-light: #F1E1DC;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0; padding:0; height:100%;}
+  body{
+    background: var(--paper);
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(34,40,31,0.05) 1px, transparent 0);
+    background-size: 18px 18px;
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    display:flex;
+    justify-content:center;
+  }
+  #app{
+    width:100%;
+    max-width: 460px;
+    min-height:100vh;
+    background: var(--paper);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    padding-bottom: 84px;
+  }
+
+  header.top{
+    padding: 28px 22px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  header.top .kicker{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.02em;
+    color: var(--ink-soft);
+    margin: 0 0 4px;
+  }
+  header.top h1{
+    font-family:'Source Serif 4', serif;
+    font-weight:600;
+    font-size: 27px;
+    margin:0;
+    color: var(--ink);
+  }
+
+  main{ flex:1; padding: 20px 18px 20px; }
+  section.view{ display:none; }
+  section.view.active{ display:block; }
+
+  /* ---- form ---- */
+  .field{ margin-bottom: 18px; }
+  .field label{
+    display:block;
+    font-size: 13px;
+    font-weight:600;
+    color: var(--ink-soft);
+    margin-bottom: 7px;
+  }
+  .field input[type=text],
+  .field input[type=date],
+  .field input[type=number],
+  .field select,
+  .field textarea{
+    width:100%;
+    padding: 12px 13px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--card);
+    font-family:'Inter', sans-serif;
+    font-size: 15px;
+    color: var(--ink);
+  }
+  .field input[type=number]{ font-family:'IBM Plex Mono', monospace; }
+  .field textarea{ min-height: 72px; resize: vertical; font-family:'Inter', sans-serif; }
+  .field input:focus, .field textarea:focus{
+    outline: 2px solid var(--forest);
+    outline-offset: 1px;
+  }
+  .amount-wrap{ position:relative; }
+  .amount-wrap .peso{
+    position:absolute; left:13px; top:50%; transform:translateY(-50%);
+    font-family:'IBM Plex Mono', monospace; color: var(--ink-soft); font-size:15px;
+  }
+  .amount-wrap input{ padding-left: 28px !important; }
+
+  .photo-row{ display:flex; gap:10px; margin-bottom: 18px; }
+  .photo-btn{
+    flex:1;
+    padding: 13px 10px;
+    border: 1px dashed var(--ink-soft);
+    border-radius: 3px;
+    background: var(--paper-light);
+    color: var(--ink);
+    font-family:'Inter', sans-serif;
+    font-size: 13.5px;
+    font-weight:500;
+    cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .photo-btn svg{ width:20px; height:20px; stroke: var(--forest); }
+  .photo-btn:active{ background: var(--stamp-light); }
+
+  .photo-preview{
+    margin-bottom: 18px;
+    position:relative;
+    border-radius: 3px;
+    overflow:hidden;
+    border: 1px solid var(--line);
+  }
+  .photo-preview img{ display:block; width:100%; max-height:260px; object-fit:cover; }
+  .photo-preview button{
+    position:absolute; top:8px; right:8px;
+    background: rgba(34,40,31,0.75);
+    color:#fff; border:none; border-radius:50%;
+    width:28px; height:28px; font-size:16px; cursor:pointer; line-height:1;
+  }
+
+  .save-btn{
+    width:100%;
+    padding: 15px;
+    background: var(--forest);
+    color: #fff;
+    border:none;
+    border-radius: 3px;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size: 15px;
+    cursor:pointer;
+    margin-top: 4px;
+  }
+  .save-btn:active{ background: var(--forest-dark); }
+  .save-btn:disabled{ background:#B7BDB1; cursor:default; }
+
+  /* ---- receipt slip card ---- */
+  .slip{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 4px 4px 0 0;
+    padding: 14px 16px 18px;
+    margin-bottom: 20px;
+    position: relative;
+    clip-path: polygon(
+      0% 0%, 100% 0%, 100% 92%,
+      96% 100%, 92% 92%, 88% 100%, 84% 92%, 80% 100%, 76% 92%, 72% 100%,
+      68% 92%, 64% 100%, 60% 92%, 56% 100%, 52% 92%, 48% 100%, 44% 92%,
+      40% 100%, 36% 92%, 32% 100%, 28% 92%, 24% 100%, 20% 92%, 16% 100%,
+      12% 92%, 8% 100%, 4% 92%, 0% 100%
+    );
+    padding-bottom: 26px;
+  }
+  .slip .row1{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .slip .client{ font-family:'Source Serif 4', serif; font-weight:600; font-size:16.5px; }
+  .slip .date{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color: var(--ink-soft); margin-top:3px; }
+  .slip .amount{ font-family:'IBM Plex Mono', monospace; font-weight:600; font-size: 16px; white-space:nowrap; }
+  .slip .notes{ font-size: 13.5px; color: var(--ink-soft); margin-top:8px; line-height:1.4; }
+  .slip .thumb{
+    margin-top:10px; width:100%; max-height:150px; object-fit:cover;
+    border-radius:3px; border:1px solid var(--line); display:block;
+  }
+  .slip .cat{
+    display:inline-block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing:0.02em;
+    color: var(--forest-dark);
+    background: #E4EDE8;
+    padding: 3px 8px;
+    border-radius: 3px;
+    margin-top: 8px;
+  }
+  .slip .del{
+    margin-top:10px;
+    margin-left:8px;
+    background:none; border:none; color: var(--stamp);
+    font-family:'Inter', sans-serif; font-size:12.5px; font-weight:600;
+    cursor:pointer; padding:0;
+  }
+
+  .settings-block{
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+  }
+  .settings-block h3{
+    font-family:'Source Serif 4', serif;
+    font-size: 15px;
+    margin: 0 0 6px;
+    color: var(--ink);
+  }
+  .settings-block p.hint{
+    font-size: 12px; color: var(--ink-soft); line-height:1.5; margin: 0 0 14px;
+  }
+  .drive-status{
+    font-size: 12.5px; margin-top: 6px;
+  }
+  .drive-status.connected{ color: var(--forest); font-weight:600; }
+  .drive-status.disconnected{ color: var(--ink-soft); }
+  .drive-btn{
+    width:100%; padding:14px; background:#fff; color: var(--forest-dark);
+    border: 1.5px solid var(--forest); border-radius:3px; font-weight:600;
+    font-size:14.5px; font-family:'Inter',sans-serif; cursor:pointer; margin-top:10px;
+  }
+  .drive-btn:disabled{ opacity:0.5; }
+
+  .empty{
+    text-align:center; padding: 60px 20px; color: var(--ink-soft);
+  }
+  .empty .mark{ font-family:'Source Serif 4', serif; font-size:20px; color: var(--ink); margin-bottom:8px; }
+  .empty p{ font-size: 13.5px; line-height:1.5; margin:0; }
+
+  /* ---- report ---- */
+  .range-row{ display:flex; gap:10px; }
+  .range-row .field{ flex:1; }
+  .summary-box{
+    background: var(--forest);
+    color:#fff;
+    border-radius: 4px;
+    padding: 18px;
+    margin: 4px 0 20px;
+  }
+  .summary-box .label{ font-size:12px; opacity:0.85; margin-bottom:4px; }
+  .summary-box .total{ font-family:'IBM Plex Mono', monospace; font-size: 28px; font-weight:600; }
+  .summary-box .count{ font-size:12.5px; opacity:0.85; margin-top:6px; }
+  .day-group{ margin-bottom: 16px; }
+  .day-group .day-head{
+    display:flex; justify-content:space-between;
+    font-family:'IBM Plex Mono', monospace; font-size:12px;
+    color: var(--ink-soft); border-bottom:1px solid var(--line);
+    padding-bottom:5px; margin-bottom:8px;
+  }
+  .gen-btn{
+    width:100%; padding:15px; background: var(--stamp); color:#fff;
+    border:none; border-radius:3px; font-weight:600; font-size:15px;
+    font-family:'Inter', sans-serif; cursor:pointer; margin-top:8px;
+  }
+  .gen-btn:disabled{ background:#C9B3AF; }
+
+  /* ---- toast ---- */
+  #toast{
+    position:fixed; left:50%; bottom: 100px; transform:translateX(-50%) translateY(20px);
+    background: var(--ink); color:#F5F3EC; padding: 11px 18px; border-radius: 4px;
+    font-size: 13.5px; opacity:0; pointer-events:none; transition: all 0.25s ease;
+    z-index: 50; max-width: 80%; text-align:center;
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ---- nav ---- */
+  nav.tabs{
+    position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+    width:100%; max-width:460px;
+    background: var(--paper-light);
+    border-top: 1px solid var(--line);
+    display:flex;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+  nav.tabs button{
+    flex:1; background:none; border:none; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    padding: 6px 4px; color: var(--ink-soft); font-family:'Inter', sans-serif;
+    font-size: 11px; font-weight:500;
+  }
+  nav.tabs button svg{ width:20px; height:20px; stroke: var(--ink-soft); fill:none; stroke-width:1.8; }
+  nav.tabs button.active{ color: var(--forest); }
+  nav.tabs button.active svg{ stroke: var(--forest); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="top">
+    <p class="kicker">expense capture</p>
+    <h1 id="headerTitle">New expense</h1>
+  </header>
+
+  <main>
+    <!-- NEW EXPENSE -->
+    <section class="view active" id="view-new">
+      <div class="photo-row">
+        <button class="photo-btn" id="btnCamera">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.3"/></svg>
+          Take photo
+        </button>
+        <button class="photo-btn" id="btnLibrary">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 3.5 3.5L16.5 11 20 14.5"/></svg>
+          From library
+        </button>
+        <input type="file" accept="image/*" capture="environment" id="fileCamera" hidden />
+        <input type="file" accept="image/*" id="fileLibrary" hidden />
+      </div>
+      <div id="photoPreviewWrap"></div>
+
+      <div class="field">
+        <label for="inClient">Client / Project</label>
+        <input type="text" id="inClient" placeholder="e.g. Unilever PH" />
+      </div>
+      <div class="field">
+        <label for="inCategory">Category</label>
+        <select id="inCategory">
+          <option value="Transportation">Transportation</option>
+          <option value="Meals">Meals</option>
+          <option value="Accommodations">Accommodations</option>
+          <option value="Airfare">Airfare</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="inDate">Date</label>
+        <input type="date" id="inDate" />
+      </div>
+      <div class="field">
+        <label for="inAmount">Amount</label>
+        <div class="amount-wrap">
+          <span class="peso">₱</span>
+          <input type="number" id="inAmount" step="0.01" min="0" placeholder="0.00" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="inNotes">Notes</label>
+        <textarea id="inNotes" placeholder="What was this for?"></textarea>
+      </div>
+
+      <button class="save-btn" id="btnSave">Save expense</button>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="view" id="view-history">
+      <div id="historyList"></div>
+    </section>
+
+    <!-- REPORT -->
+    <section class="view" id="view-report">
+      <div class="range-row">
+        <div class="field">
+          <label for="rFrom">From</label>
+          <input type="date" id="rFrom" />
+        </div>
+        <div class="field">
+          <label for="rTo">To</label>
+          <input type="date" id="rTo" />
+        </div>
+      </div>
+      <div id="reportPreview"></div>
+      <button class="gen-btn" id="btnGenerate">Download PDF report</button>
+      <button class="drive-btn" id="btnDriveSave">Save to Google Drive</button>
+
+      <div class="settings-block">
+        <h3>Google Drive setup</h3>
+        <p class="hint">One-time step: paste your Google OAuth Client ID here, then use "Save to Google Drive" above — it'll ask you to sign in the first time. Reports are saved into a "Reimbursements" folder in your Drive.</p>
+        <div class="field">
+          <label for="inClientId">Google Client ID</label>
+          <input type="text" id="inClientId" placeholder="xxxxx.apps.googleusercontent.com" />
+        </div>
+        <div class="drive-status disconnected" id="driveStatus">Not connected yet</div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-view="new">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+      New
+    </button>
+    <button class="tab-btn" data-view="history">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10" stroke-linecap="round"/></svg>
+      History
+    </button>
+    <button class="tab-btn" data-view="report">
+      <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h6M9 16h6" stroke-linecap="round"/></svg>
+      Report
+    </button>
+  </nav>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const state = { photoDataUrl: null, expenses: [] };
+
+  const $ = (id) => document.getElementById(id);
+  const todayStr = () => new Date().toISOString().slice(0,10);
+  $('inDate').value = todayStr();
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  $('rFrom').value = firstOfMonth;
+  $('rTo').value = todayStr();
+
+  function toast(msg){
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toast._h);
+    toast._h = setTimeout(()=> t.classList.remove('show'), 2200);
+  }
+
+  function peso(n){
+    return '₱' + Number(n||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  // ---------- tabs ----------
+  const titles = { new: 'New expense', history: 'My expenses', report: 'Reimbursement report' };
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+      btn.classList.add('active');
+      const v = btn.dataset.view;
+      $('view-'+v).classList.add('active');
+      $('headerTitle').textContent = titles[v];
+      if(v === 'history') renderHistory();
+      if(v === 'report') renderReportPreview();
+    });
+  });
+
+  // ---------- photo capture ----------
+  $('btnCamera').addEventListener('click', ()=> $('fileCamera').click());
+  $('btnLibrary').addEventListener('click', ()=> $('fileLibrary').click());
+  $('fileCamera').addEventListener('change', e => handleFile(e.target.files[0]));
+  $('fileLibrary').addEventListener('change', e => handleFile(e.target.files[0]));
+
+  function handleFile(file){
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 1280;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        state.photoDataUrl = canvas.toDataURL('image/jpeg', 0.68);
+        renderPhotoPreview();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderPhotoPreview(){
+    const wrap = $('photoPreviewWrap');
+    if(!state.photoDataUrl){ wrap.innerHTML=''; return; }
+    wrap.innerHTML = `<div class="photo-preview">
+      <img src="${state.photoDataUrl}" alt="Receipt preview" />
+      <button id="btnRemovePhoto" aria-label="Remove photo">×</button>
+    </div>`;
+    $('btnRemovePhoto').addEventListener('click', ()=>{
+      state.photoDataUrl = null;
+      renderPhotoPreview();
+    });
+  }
+
+  // ---------- storage ----------
+  async function loadExpenses(){
+    try{
+      const idx = await window.storage.get('expense_ids', false);
+      const ids = idx ? JSON.parse(idx.value) : [];
+      const items = [];
+      for(const id of ids){
+        try{
+          const rec = await window.storage.get('expense_' + id, false);
+          if(rec) items.push(JSON.parse(rec.value));
+        }catch(err){ /* record missing, skip */ }
+      }
+      items.sort((a,b)=> (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
+      state.expenses = items;
+    }catch(err){
+      state.expenses = [];
+    }
+  }
+
+  async function saveExpense(rec){
+    let ids = [];
+    try{
+      const idx = await window.storage.get('expense_ids', false);
+      ids = idx ? JSON.parse(idx.value) : [];
+    }catch(err){ ids = []; }
+    ids.push(rec.id);
+    await window.storage.set('expense_' + rec.id, JSON.stringify(rec), false);
+    await window.storage.set('expense_ids', JSON.stringify(ids), false);
+  }
+
+  async function deleteExpense(id){
+    try{
+      const idx = await window.storage.get('expense_ids', false);
+      let ids = idx ? JSON.parse(idx.value) : [];
+      ids = ids.filter(x => x !== id);
+      await window.storage.set('expense_ids', JSON.stringify(ids), false);
+      await window.storage.delete('expense_' + id, false);
+    }catch(err){ /* best effort */ }
+    await loadExpenses();
+    renderHistory();
+    renderReportPreview();
+  }
+
+  // ---------- save flow ----------
+  $('btnSave').addEventListener('click', async ()=>{
+    const client = $('inClient').value.trim();
+    const category = $('inCategory').value;
+    const date = $('inDate').value;
+    const amount = parseFloat($('inAmount').value);
+    const notes = $('inNotes').value.trim();
+
+    if(!client){ toast('Add a client or project name.'); return; }
+    if(!date){ toast('Pick a date.'); return; }
+    if(!amount || amount <= 0){ toast('Enter an amount greater than zero.'); return; }
+
+    const btn = $('btnSave');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    const rec = {
+      id: 'e' + Date.now() + Math.random().toString(36).slice(2,7),
+      client, category, date, amount, notes,
+      photo: state.photoDataUrl || null,
+      createdAt: new Date().toISOString()
+    };
+
+    try{
+      await saveExpense(rec);
+      toast('Expense saved.');
+      $('inClient').value = '';
+      $('inAmount').value = '';
+      $('inNotes').value = '';
+      $('inCategory').value = 'Transportation';
+      $('inDate').value = todayStr();
+      state.photoDataUrl = null;
+      renderPhotoPreview();
+      await loadExpenses();
+    }catch(err){
+      toast('Could not save — try again.');
+    }
+    btn.disabled = false; btn.textContent = 'Save expense';
+  });
+
+  // ---------- history ----------
+  function renderHistory(){
+    const wrap = $('historyList');
+    if(!state.expenses.length){
+      wrap.innerHTML = `<div class="empty">
+        <div class="mark">No expenses yet</div>
+        <p>Entries you save will show up here as receipt slips, newest first.</p>
+      </div>`;
+      return;
+    }
+    wrap.innerHTML = state.expenses.map(x => `
+      <div class="slip">
+        <div class="row1">
+          <div>
+            <div class="client">${escapeHtml(x.client)}</div>
+            <div class="date">${formatDate(x.date)}</div>
+          </div>
+          <div class="amount">${peso(x.amount)}</div>
+        </div>
+        ${x.notes ? `<div class="notes">${escapeHtml(x.notes)}</div>` : ''}
+        ${x.photo ? `<img class="thumb" src="${x.photo}" alt="Receipt" />` : ''}
+        <div>
+          ${x.category ? `<span class="cat">${escapeHtml(x.category)}</span>` : ''}
+          <button class="del" data-id="${x.id}">Delete</button>
+        </div>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('.del').forEach(b=>{
+      b.addEventListener('click', ()=> deleteExpense(b.dataset.id));
+    });
+  }
+
+  function formatDate(d){
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('en-PH', {weekday:'short', year:'numeric', month:'short', day:'numeric'});
+  }
+  function escapeHtml(s){
+    return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- report ----------
+  function inRange(x){
+    const from = $('rFrom').value, to = $('rTo').value;
+    return (!from || x.date >= from) && (!to || x.date <= to);
+  }
+
+  function groupByDay(items){
+    const map = {};
+    items.forEach(x => {
+      if(!map[x.date]) map[x.date] = [];
+      map[x.date].push(x);
+    });
+    return Object.keys(map).sort().map(date => ({
+      date, items: map[date],
+      total: map[date].reduce((s,x)=>s+x.amount,0)
+    }));
+  }
+
+  function renderReportPreview(){
+    const items = state.expenses.filter(inRange);
+    const grand = items.reduce((s,x)=>s+x.amount,0);
+    const days = groupByDay(items);
+
+    let html = `<div class="summary-box">
+      <div class="label">Total for period</div>
+      <div class="total">${peso(grand)}</div>
+      <div class="count">${items.length} receipt${items.length===1?'':'s'} · ${days.length} day${days.length===1?'':'s'}</div>
+    </div>`;
+
+    if(!days.length){
+      html += `<div class="empty"><div class="mark">Nothing in this range</div><p>Adjust the dates above, or add expenses first.</p></div>`;
+    } else {
+      html += days.map(d => `
+        <div class="day-group">
+          <div class="day-head"><span>${formatDate(d.date)}</span><span>${peso(d.total)}</span></div>
+        </div>
+      `).join('');
+    }
+    $('reportPreview').innerHTML = html;
+    $('btnGenerate').disabled = items.length === 0;
+  }
+
+  ['rFrom','rTo'].forEach(id => $(id).addEventListener('change', renderReportPreview));
+
+  // ---------- PDF generation (shared builder) ----------
+  function groupByCategory(items){
+    const map = {};
+    items.forEach(x => {
+      const c = x.category || 'Other';
+      map[c] = (map[c]||0) + x.amount;
+    });
+    return Object.keys(map).sort().map(cat => ({ cat, total: map[cat] }));
+  }
+
+  async function buildReportDoc(items){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'pt', format:'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 40;
+    let y = margin;
+
+    const forest = [44,95,74];
+    const ink = [34,40,31];
+    const inkSoft = [91,97,86];
+
+    function ensureSpace(h){
+      if(y + h > pageH - margin){ doc.addPage(); y = margin; }
+    }
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...ink);
+    doc.text('Reimbursement Report', margin, y); y += 22;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...inkSoft);
+    doc.text(`Period: ${$('rFrom').value || '—'}  to  ${$('rTo').value || '—'}`, margin, y); y += 14;
+    doc.text(`Generated: ${new Date().toLocaleString('en-PH')}`, margin, y); y += 22;
+    doc.setDrawColor(217,212,198); doc.line(margin, y, pageW-margin, y); y += 20;
+
+    // category summary
+    const cats = groupByCategory(items);
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...ink);
+    doc.text('By category', margin, y); y += 16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    cats.forEach(c => {
+      doc.setTextColor(...inkSoft); doc.text(c.cat, margin, y);
+      doc.setTextColor(...ink); doc.text(peso(c.total), pageW - margin, y, {align:'right'});
+      y += 14;
+    });
+    y += 10;
+    doc.setDrawColor(217,212,198); doc.line(margin, y, pageW-margin, y); y += 20;
+
+    const days = groupByDay(items);
+    const grand = items.reduce((s,x)=>s+x.amount,0);
+
+    for(const day of days){
+      ensureSpace(30);
+      doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...forest);
+      doc.text(formatDate(day.date), margin, y);
+      doc.setFont('helvetica','bold'); doc.setFontSize(12);
+      doc.text(peso(day.total), pageW - margin, y, {align:'right'});
+      y += 16;
+      doc.setDrawColor(217,212,198); doc.line(margin, y, pageW-margin, y); y += 14;
+
+      for(const x of day.items){
+        const imgH = x.photo ? 130 : 0;
+        ensureSpace(58 + imgH);
+
+        doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...ink);
+        doc.text(x.client, margin, y);
+        doc.setFont('helvetica','bold'); doc.setFontSize(11);
+        doc.text(peso(x.amount), pageW - margin, y, {align:'right'});
+        y += 13;
+
+        doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...forest);
+        doc.text((x.category || 'Other').toUpperCase(), margin, y);
+        y += 12;
+
+        if(x.notes){
+          doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...inkSoft);
+          const lines = doc.splitTextToSize(x.notes, pageW - margin*2);
+          doc.text(lines, margin, y);
+          y += lines.length * 12;
+        }
+
+        if(x.photo){
+          try{
+            const dim = await imgDimensions(x.photo);
+            const maxW = 170, maxH = 130;
+            let w = dim.w, h = dim.h;
+            const scale = Math.min(maxW/w, maxH/h, 1);
+            w *= scale; h *= scale;
+            ensureSpace(h + 10);
+            doc.addImage(x.photo, 'JPEG', margin, y, w, h);
+            y += h + 12;
+          }catch(err){ y += 4; }
+        } else {
+          y += 6;
+        }
+        doc.setDrawColor(235,232,222); doc.line(margin, y, pageW-margin, y); y += 12;
+      }
+      y += 8;
+    }
+
+    ensureSpace(40);
+    doc.setDrawColor(...ink); doc.setLineWidth(1); doc.line(margin, y, pageW-margin, y); y += 20;
+    doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(...ink);
+    doc.text('Total reimbursement', margin, y);
+    doc.text(peso(grand), pageW - margin, y, {align:'right'});
+
+    const filename = `reimbursement-report-${$('rFrom').value}-to-${$('rTo').value}.pdf`;
+    return { doc, filename };
+  }
+
+  function imgDimensions(dataUrl){
+    return new Promise((resolve, reject)=>{
+      const img = new Image();
+      img.onload = ()=> resolve({w:img.width, h:img.height});
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
+  $('btnGenerate').addEventListener('click', async ()=>{
+    const items = state.expenses.filter(inRange);
+    if(!items.length){ toast('No expenses in this range.'); return; }
+    const btn = $('btnGenerate');
+    btn.disabled = true; const origText = btn.textContent; btn.textContent = 'Building PDF…';
+    try{
+      const { doc, filename } = await buildReportDoc(items);
+      doc.save(filename);
+      toast('PDF downloaded.');
+    }catch(err){
+      console.error(err);
+      toast('Something went wrong building the PDF.');
+    }
+    btn.disabled = false; btn.textContent = origText;
+  });
+
+  // ---------- Google Drive ----------
+  let gClientId = null;
+  let gDriveToken = null;
+
+  async function loadClientId(){
+    try{
+      const r = await window.storage.get('google_client_id', false);
+      gClientId = r ? JSON.parse(r.value) : null;
+    }catch(err){ gClientId = null; }
+    if(gClientId) $('inClientId').value = gClientId;
+  }
+
+  $('inClientId').addEventListener('change', async ()=>{
+    gClientId = $('inClientId').value.trim();
+    gDriveToken = null;
+    updateDriveStatus();
+    try{ await window.storage.set('google_client_id', JSON.stringify(gClientId), 'new'); }
+    catch(err){
+      try{
+        const r = await window.storage.get('google_client_id', false);
+        await window.storage.set('google_client_id', JSON.stringify(gClientId), r ? r.version : 'new');
+      }catch(e2){ /* best effort */ }
+    }
+  });
+
+  function updateDriveStatus(){
+    const el = $('driveStatus');
+    if(gDriveToken){
+      el.textContent = 'Connected — reports will save to your Drive.';
+      el.className = 'drive-status connected';
+    } else if(gClientId){
+      el.textContent = 'Client ID saved. Not signed in yet.';
+      el.className = 'drive-status disconnected';
+    } else {
+      el.textContent = 'Not connected yet.';
+      el.className = 'drive-status disconnected';
+    }
+  }
+
+  function ensureGisLoaded(){
+    return new Promise((resolve, reject)=>{
+      if(window.google && window.google.accounts && window.google.accounts.oauth2) return resolve();
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('Could not load Google sign-in.'));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function connectDrive(){
+    if(!gClientId) throw new Error('no-client-id');
+    await ensureGisLoaded();
+    return new Promise((resolve, reject)=>{
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: gClientId,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        callback: (resp)=>{
+          if(resp && resp.access_token){
+            gDriveToken = resp.access_token;
+            updateDriveStatus();
+            resolve(resp);
+          } else {
+            reject(resp || new Error('No access token returned.'));
+          }
+        }
+      });
+      client.requestAccessToken();
+    });
+  }
+
+  async function getOrCreateFolder(){
+    try{
+      const stored = await window.storage.get('drive_folder_id', false);
+      if(stored) return JSON.parse(stored.value);
+    }catch(err){ /* not stored yet */ }
+
+    const q = encodeURIComponent("name='Reimbursements' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`, {
+      headers:{ Authorization: 'Bearer ' + gDriveToken }
+    });
+    const data = await res.json();
+    let folderId;
+    if(data.files && data.files.length){
+      folderId = data.files[0].id;
+    } else {
+      const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method:'POST',
+        headers:{ Authorization: 'Bearer ' + gDriveToken, 'Content-Type':'application/json' },
+        body: JSON.stringify({ name:'Reimbursements', mimeType:'application/vnd.google-apps.folder' })
+      });
+      const created = await createRes.json();
+      folderId = created.id;
+    }
+    try{ await window.storage.set('drive_folder_id', JSON.stringify(folderId), 'new'); }catch(err){ /* best effort */ }
+    return folderId;
+  }
+
+  async function uploadPdfToDrive(blob, filename){
+    const folderId = await getOrCreateFolder();
+    const metadata = { name: filename, mimeType: 'application/pdf', parents: [folderId] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', blob);
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + gDriveToken },
+      body: form
+    });
+    if(!res.ok) throw new Error('Drive upload failed: ' + res.status);
+    return res.json();
+  }
+
+  $('btnDriveSave').addEventListener('click', async ()=>{
+    const items = state.expenses.filter(inRange);
+    if(!items.length){ toast('No expenses in this range.'); return; }
+    if(!gClientId){ toast('Paste your Google Client ID below first.'); return; }
+
+    const btn = $('btnDriveSave');
+    btn.disabled = true; const origText = btn.textContent;
+    try{
+      if(!gDriveToken){
+        btn.textContent = 'Signing in…';
+        await connectDrive();
+      }
+      btn.textContent = 'Uploading…';
+      const { doc, filename } = await buildReportDoc(items);
+      const blob = doc.output('blob');
+      await uploadPdfToDrive(blob, filename);
+      toast('Saved to Google Drive → Reimbursements.');
+    }catch(err){
+      console.error(err);
+      if(err && err.message === 'no-client-id'){
+        toast('Paste your Google Client ID below first.');
+      } else {
+        toast('Could not save to Drive. See setup notes below.');
+      }
+    }
+    btn.disabled = false; btn.textContent = origText;
+  });
+
+  // ---------- init ----------
+  (async function init(){
+    await loadExpenses();
+    await loadClientId();
+    updateDriveStatus();
+    renderHistory();
+    renderReportPreview();
+  })();
+
+})();
+</script>
+</body>
+</html>
