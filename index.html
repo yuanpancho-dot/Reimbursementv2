@@ -140,7 +140,8 @@
   }
 
   .save-btn{
-    width:100%;
+    width: calc(100% - 36px);
+    max-width: 424px;
     padding: 15px;
     background: var(--forest);
     color: #fff;
@@ -150,7 +151,12 @@
     font-weight:600;
     font-size: 15px;
     cursor:pointer;
-    margin-top: 4px;
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(70px + env(safe-area-inset-bottom));
+    z-index: 40;
+    box-shadow: 0 -4px 14px rgba(34,40,31,0.12);
   }
   .save-btn:active{ background: var(--forest-dark); }
   .save-btn:disabled{ background:#B7BDB1; cursor:default; }
@@ -226,6 +232,7 @@
   }
   .drive-btn:disabled{ opacity:0.5; }
 
+  #view-new{ padding-bottom: 90px; }
   .empty{
     text-align:center; padding: 60px 20px; color: var(--ink-soft);
   }
