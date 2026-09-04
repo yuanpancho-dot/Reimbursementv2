@@ -488,14 +488,15 @@
   // ---------- storage ----------
   async function loadExpenses(){
     try{
-      const idx = await window.storage.get('expense_ids', false);
-      const ids = idx ? JSON.parse(idx.value) : [];
+      const idxRaw = localStorage.getItem('expense_ids');
+      const ids = idxRaw ? JSON.parse(idxRaw) : [];
       const items = [];
       for(const id of ids){
-        try{
-          const rec = await window.storage.get('expense_' + id, false);
-          if(rec) items.push(JSON.parse(rec.value));
-        }catch(err){ /* record missing, skip */ }
+        const raw = localStorage.getItem('expense_' + id);
+        if(raw){
+          try{ items.push(JSON.parse(raw)); }
+          catch(e){ /* corrupt record, skip */ }
+        }
       }
       items.sort((a,b)=> (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
       state.expenses = items;
@@ -505,23 +506,20 @@
   }
 
   async function saveExpense(rec){
-    let ids = [];
-    try{
-      const idx = await window.storage.get('expense_ids', false);
-      ids = idx ? JSON.parse(idx.value) : [];
-    }catch(err){ ids = []; }
+    const idxRaw = localStorage.getItem('expense_ids');
+    let ids = idxRaw ? JSON.parse(idxRaw) : [];
     ids.push(rec.id);
-    await window.storage.set('expense_' + rec.id, JSON.stringify(rec), false);
-    await window.storage.set('expense_ids', JSON.stringify(ids), false);
+    localStorage.setItem('expense_' + rec.id, JSON.stringify(rec));
+    localStorage.setItem('expense_ids', JSON.stringify(ids));
   }
 
   async function deleteExpense(id){
     try{
-      const idx = await window.storage.get('expense_ids', false);
-      let ids = idx ? JSON.parse(idx.value) : [];
+      const idxRaw = localStorage.getItem('expense_ids');
+      let ids = idxRaw ? JSON.parse(idxRaw) : [];
       ids = ids.filter(x => x !== id);
-      await window.storage.set('expense_ids', JSON.stringify(ids), false);
-      await window.storage.delete('expense_' + id, false);
+      localStorage.setItem('expense_ids', JSON.stringify(ids));
+      localStorage.removeItem('expense_' + id);
     }catch(err){ /* best effort */ }
     await loadExpenses();
     renderHistory();
@@ -790,23 +788,18 @@
 
   async function loadClientId(){
     try{
-      const r = await window.storage.get('google_client_id', false);
-      gClientId = r ? JSON.parse(r.value) : null;
+      const raw = localStorage.getItem('google_client_id');
+      gClientId = raw ? JSON.parse(raw) : null;
     }catch(err){ gClientId = null; }
     if(gClientId) $('inClientId').value = gClientId;
   }
 
-  $('inClientId').addEventListener('change', async ()=>{
+  $('inClientId').addEventListener('change', ()=>{
     gClientId = $('inClientId').value.trim();
     gDriveToken = null;
     updateDriveStatus();
-    try{ await window.storage.set('google_client_id', JSON.stringify(gClientId), 'new'); }
-    catch(err){
-      try{
-        const r = await window.storage.get('google_client_id', false);
-        await window.storage.set('google_client_id', JSON.stringify(gClientId), r ? r.version : 'new');
-      }catch(e2){ /* best effort */ }
-    }
+    try{ localStorage.setItem('google_client_id', JSON.stringify(gClientId)); }
+    catch(err){ /* best effort */ }
   });
 
   function updateDriveStatus(){
@@ -857,8 +850,8 @@
 
   async function getOrCreateFolder(){
     try{
-      const stored = await window.storage.get('drive_folder_id', false);
-      if(stored) return JSON.parse(stored.value);
+      const stored = localStorage.getItem('drive_folder_id');
+      if(stored) return JSON.parse(stored);
     }catch(err){ /* not stored yet */ }
 
     const q = encodeURIComponent("name='Reimbursements' and mimeType='application/vnd.google-apps.folder' and trashed=false");
@@ -878,7 +871,7 @@
       const created = await createRes.json();
       folderId = created.id;
     }
-    try{ await window.storage.set('drive_folder_id', JSON.stringify(folderId), 'new'); }catch(err){ /* best effort */ }
+    try{ localStorage.setItem('drive_folder_id', JSON.stringify(folderId)); }catch(err){ /* best effort */ }
     return folderId;
   }
 
