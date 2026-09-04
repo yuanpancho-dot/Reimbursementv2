@@ -376,12 +376,14 @@
 
       <div class="settings-block">
         <h3>Google Drive setup</h3>
-        <p class="hint">One-time step: paste your Google OAuth Client ID here, then use "Save to Google Drive" above — it'll ask you to sign in the first time. Reports are saved into a "Reimbursements" folder in your Drive.</p>
+        <p class="hint">One-time step: paste your Google OAuth Client ID here. "Save to Google Drive" (above) saves PDF reports. Down here, "Back up my data" saves your actual expense records (with photos) as a file in Drive, and "Restore" pulls them back onto this device if you ever lose local data.</p>
         <div class="field">
           <label for="inClientId">Google Client ID</label>
           <input type="text" id="inClientId" placeholder="xxxxx.apps.googleusercontent.com" />
         </div>
         <div class="drive-status disconnected" id="driveStatus">Not connected yet</div>
+        <button class="drive-btn" id="btnBackup">Back up my data now</button>
+        <button class="drive-btn" id="btnRestore">Restore from Google Drive</button>
       </div>
     </section>
   </main>
@@ -524,6 +526,7 @@
     await loadExpenses();
     renderHistory();
     renderReportPreview();
+    if(gDriveToken) backupToDrive(true);
   }
 
   // ---------- save flow ----------
@@ -559,6 +562,7 @@
       state.photoDataUrl = null;
       renderPhotoPreview();
       await loadExpenses();
+      if(gDriveToken) backupToDrive(true);
     }catch(err){
       toast('Could not save — try again.');
     }
@@ -917,6 +921,95 @@
     }
     btn.disabled = false; btn.textContent = origText;
   });
+
+  async function findBackupFileId(folderId){
+    try{
+      const cached = localStorage.getItem('drive_backup_file_id');
+      if(cached) return JSON.parse(cached);
+    }catch(err){ /* not cached yet */ }
+    const q = encodeURIComponent(`name='reimbursements-data.json' and '${folderId}' in parents and trashed=false`);
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`, {
+      headers:{ Authorization: 'Bearer ' + gDriveToken }
+    });
+    const data = await res.json();
+    if(data.files && data.files.length){
+      localStorage.setItem('drive_backup_file_id', JSON.stringify(data.files[0].id));
+      return data.files[0].id;
+    }
+    return null;
+  }
+
+  async function backupToDrive(silent){
+    if(!gClientId){ if(!silent) toast('Add your Google Client ID first.'); return; }
+    if(!gDriveToken){
+      if(silent) return;
+      try{ await connectDrive(); }catch(err){ toast('Could not connect to Drive.'); return; }
+    }
+    try{
+      const folderId = await getOrCreateFolder();
+      const dataStr = JSON.stringify({ expenses: state.expenses, updatedAt: new Date().toISOString() });
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const fileId = await findBackupFileId(folderId);
+      if(fileId){
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+          method: 'PATCH',
+          headers:{ Authorization: 'Bearer ' + gDriveToken, 'Content-Type': 'application/json' },
+          body: blob
+        });
+      } else {
+        const metadata = { name:'reimbursements-data.json', mimeType:'application/json', parents:[folderId] };
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type:'application/json' }));
+        form.append('file', blob);
+        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+          method:'POST', headers:{ Authorization:'Bearer '+gDriveToken }, body: form
+        });
+        const created = await res.json();
+        if(created.id) localStorage.setItem('drive_backup_file_id', JSON.stringify(created.id));
+      }
+      if(!silent) toast('Backed up to Google Drive.');
+    }catch(err){
+      console.error(err);
+      if(!silent) toast('Backup failed — try again.');
+    }
+  }
+
+  async function restoreFromDrive(){
+    if(!gClientId){ toast('Add your Google Client ID first.'); return; }
+    const btn = $('btnRestore');
+    btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Checking Drive…';
+    try{
+      if(!gDriveToken){ await connectDrive(); }
+      const folderId = await getOrCreateFolder();
+      const fileId = await findBackupFileId(folderId);
+      if(!fileId){ toast('No backup found in Drive yet.'); btn.disabled=false; btn.textContent=orig; return; }
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers:{ Authorization: 'Bearer ' + gDriveToken }
+      });
+      const data = await res.json();
+      const expenses = data.expenses || [];
+      const ok = confirm(`Restore ${expenses.length} expense(s) from Drive? This replaces what's currently on this device.`);
+      if(ok){
+        localStorage.setItem('expense_ids', JSON.stringify(expenses.map(x => x.id)));
+        expenses.forEach(x => localStorage.setItem('expense_' + x.id, JSON.stringify(x)));
+        await loadExpenses();
+        renderHistory();
+        renderReportPreview();
+        toast('Restored from Google Drive.');
+      }
+    }catch(err){
+      console.error(err);
+      toast('Restore failed — try again.');
+    }
+    btn.disabled = false; btn.textContent = orig;
+  }
+
+  $('btnBackup').addEventListener('click', async ()=>{
+    const btn = $('btnBackup'); btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Backing up…';
+    await backupToDrive(false);
+    btn.disabled = false; btn.textContent = orig;
+  });
+  $('btnRestore').addEventListener('click', restoreFromDrive);
 
   // ---------- init ----------
   (async function init(){
