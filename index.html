@@ -223,6 +223,53 @@
     cursor:pointer; padding:0;
   }
 
+  .instr-section{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 18px 18px 20px;
+    margin-bottom: 18px;
+  }
+  .instr-section h3{
+    font-family:'Source Serif 4', serif;
+    font-size: 16px;
+    margin: 0 0 10px;
+    color: var(--ink);
+  }
+  .instr-section p{
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--ink);
+    margin: 0 0 10px;
+  }
+  .instr-section p.instr-egs-label{
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 14px 0 6px;
+  }
+  .instr-section p.instr-note{
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 10px;
+  }
+  .instr-example{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    background: var(--paper-light);
+    border: 1px dashed var(--line);
+    border-radius: 3px;
+    padding: 10px 12px;
+    color: var(--forest-dark);
+    margin-bottom: 8px;
+    word-break: break-word;
+  }
+  .instr-example.instr-eg{
+    color: var(--ink-soft);
+    background: var(--paper);
+  }
+
   .settings-block{
     margin-top: 30px;
     padding-top: 20px;
@@ -475,6 +522,25 @@
         <button class="drive-btn" id="btnRestore">Restore from Google Drive</button>
       </div>
     </section>
+
+    <!-- INSTRUCTIONS -->
+    <section class="view" id="view-instructions">
+      <div class="instr-section">
+        <h3>1. When you create an expense</h3>
+        <p>Save a copy of the receipt into the <strong>Reimbursement</strong> folder on your laptop, and name the file using this format:</p>
+        <div class="instr-example">Category - Date - Account - Amount</div>
+        <p class="instr-egs-label">Examples</p>
+        <div class="instr-example instr-eg">Grab - Sep 2 2026 - Aboitiz Power - 205.00</div>
+        <div class="instr-example instr-eg">Meals - Sep 2 2026 - Meltwater Summit - 306.00</div>
+      </div>
+
+      <div class="instr-section">
+        <h3>2. Once a reimbursement is approved</h3>
+        <p>Move all its receipts, still in the same Reimbursement folder, into an <strong>Archived</strong> subfolder. Mark them as approved so you know at a glance it's already been paid — you're just keeping a copy on file.</p>
+        <div class="instr-example">Archived - Amount Approved</div>
+        <p class="instr-note">This means: it's been paid, but keep the copy for your records.</p>
+      </div>
+    </section>
   </main>
 
   <div id="toast"></div>
@@ -491,6 +557,10 @@
     <button class="tab-btn" data-view="report">
       <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h6M9 16h6" stroke-linecap="round"/></svg>
       Report
+    </button>
+    <button class="tab-btn" data-view="instructions">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01" stroke-linecap="round"/></svg>
+      Notes
     </button>
   </nav>
 </div>
@@ -522,7 +592,7 @@
   }
 
   // ---------- tabs ----------
-  const titles = { new: 'New expense', history: 'My expenses', report: 'Reimbursement report' };
+  const titles = { new: 'New expense', history: 'My expenses', report: 'Reimbursement report', instructions: 'Filing notes' };
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
