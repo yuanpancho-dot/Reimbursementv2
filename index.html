@@ -325,13 +325,26 @@
   .summary-box .label{ font-size:12px; opacity:0.85; margin-bottom:4px; }
   .summary-box .total{ font-family:'IBM Plex Mono', monospace; font-size: 28px; font-weight:600; }
   .summary-box .count{ font-size:12.5px; opacity:0.85; margin-top:6px; }
-  .day-group{ margin-bottom: 16px; }
+  .day-group{ margin-bottom: 18px; }
   .day-group .day-head{
     display:flex; justify-content:space-between;
-    font-family:'IBM Plex Mono', monospace; font-size:12px;
-    color: var(--ink-soft); border-bottom:1px solid var(--line);
-    padding-bottom:5px; margin-bottom:8px;
+    align-items: baseline;
+    border-bottom:1px solid var(--line);
+    padding-bottom:6px; margin-bottom:8px;
   }
+  .day-group .day-head .day-date{
+    font-family:'Source Serif 4', serif; font-size:15px; font-weight:600; color: var(--ink);
+  }
+  .day-group .day-head .day-total{
+    font-family:'IBM Plex Mono', monospace; font-size:14px; font-weight:700; color: var(--ink);
+  }
+  .day-cats{ display:flex; flex-direction:column; gap:5px; padding-left: 2px; }
+  .day-cat-row{
+    display:flex; justify-content:space-between;
+    font-size: 12.5px; color: var(--ink-soft);
+  }
+  .day-cat-row .day-cat-name{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:0.02em; }
+  .day-cat-row .day-cat-amt{ font-family:'IBM Plex Mono', monospace; }
   .gen-btn{
     width:100%; padding:15px; background: var(--stamp); color:#fff;
     border:none; border-radius:3px; font-weight:600; font-size:15px;
@@ -784,6 +797,10 @@
     const dt = new Date(d + 'T00:00:00');
     return dt.toLocaleDateString('en-PH', {month:'short', day:'numeric'});
   }
+  function formatDateLong(d){
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('en-PH', {month:'long', day:'numeric'});
+  }
   function escapeHtml(s){
     return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -820,11 +837,17 @@
     if(!days.length){
       html += `<div class="empty"><div class="mark">Nothing in this range</div><p>Adjust the dates above, or add expenses first.</p></div>`;
     } else {
-      html += days.map(d => `
+      html += days.map(d => {
+        const cats = groupByCategory(d.items);
+        return `
         <div class="day-group">
-          <div class="day-head"><span>${formatDate(d.date)}</span><span>${peso(d.total)}</span></div>
+          <div class="day-head"><span class="day-date">${formatDateLong(d.date)}</span><span class="day-total">${peso(d.total)}</span></div>
+          <div class="day-cats">
+            ${cats.map(c => `<div class="day-cat-row"><span class="day-cat-name">${escapeHtml(c.cat)}</span><span class="day-cat-amt">${peso(c.total)}</span></div>`).join('')}
+          </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
     $('reportPreview').innerHTML = html;
     $('btnGenerate').disabled = items.length === 0;
