@@ -288,6 +288,17 @@
   }
   table.hist-table td.amt{ font-family:'IBM Plex Mono', monospace; text-align:right; white-space:nowrap; }
   table.hist-table td.photo-cell{ text-align:center; white-space:nowrap; }
+  .cat-chip{
+    display:inline-block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing:0.02em;
+    color: var(--forest-dark);
+    background: #E4EDE8;
+    padding: 3px 7px;
+    border-radius: 3px;
+    white-space:nowrap;
+  }
   table.hist-table td.notes-cell{
     max-width: 170px;
     white-space: normal;
@@ -684,10 +695,12 @@
     const date = $('inDate').value;
     const amount = parseFloat($('inAmount').value);
     const notes = $('inNotes').value.trim();
+    const photo = state.photoDataUrl;
 
-    if(!client){ toast('Add a client or project name.'); return; }
-    if(!date){ toast('Pick a date.'); return; }
-    if(!amount || amount <= 0){ toast('Enter an amount greater than zero.'); return; }
+    if(!client || !category || !date || !amount || amount <= 0 || !notes || !photo){
+      toast('Uy, kulang ka pa ng entries!');
+      return;
+    }
 
     const btn = $('btnSave');
     btn.disabled = true; btn.textContent = 'Saving…';
@@ -695,7 +708,7 @@
     const rec = {
       id: 'e' + Date.now() + Math.random().toString(36).slice(2,7),
       client, category, date, amount, notes,
-      photo: state.photoDataUrl || null,
+      photo: photo,
       createdAt: new Date().toISOString()
     };
 
@@ -738,14 +751,14 @@
     </div>`;
 
     html += `<div class="hist-table-wrap"><table class="hist-table">
-      <thead><tr><th>Date</th><th>Account</th><th>Amount</th><th>Photo</th><th>Notes</th></tr></thead>
+      <thead><tr><th>Date</th><th>Account</th><th>Amount</th><th>Category</th><th>Notes</th></tr></thead>
       <tbody>`;
     state.expenses.forEach(x => {
       html += `<tr data-id="${x.id}">
         <td class="date-cell">${formatDateShort(x.date)}</td>
         <td class="acct-cell">${escapeHtml(x.client)}</td>
         <td class="amt">${peso(x.amount)}</td>
-        <td class="photo-cell">${x.photo ? '<span class="photo-yes">Yes</span>' : '<span class="photo-no">—</span>'}</td>
+        <td class="photo-cell">${x.category ? `<span class="cat-chip">${escapeHtml(x.category)}</span>` : '—'}</td>
         <td class="notes-cell">${x.notes ? escapeHtml(x.notes) : '—'}</td>
       </tr>`;
     });
