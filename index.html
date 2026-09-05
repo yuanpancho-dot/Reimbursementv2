@@ -107,7 +107,24 @@
   }
   .amount-wrap input{ padding-left: 28px !important; }
 
-  .photo-row{ display:flex; gap:10px; margin-bottom: 18px; }
+  .photo-row{ display:flex; gap:10px; }
+  .dropzone{
+    border: 2px dashed var(--line);
+    border-radius: 5px;
+    padding: 14px;
+    margin-bottom: 18px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .dropzone.drag-over{
+    border-color: var(--forest);
+    background: #EAF2ED;
+  }
+  .drop-hint{
+    text-align:center;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin: 10px 0 0;
+  }
   .photo-btn{
     flex:1;
     padding: 13px 10px;
@@ -306,19 +323,22 @@
   <main>
     <!-- NEW EXPENSE -->
     <section class="view active" id="view-new">
-      <div class="photo-row">
-        <button class="photo-btn" id="btnCamera">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.3"/></svg>
-          Take photo
-        </button>
-        <button class="photo-btn" id="btnLibrary">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 3.5 3.5L16.5 11 20 14.5"/></svg>
-          From library
-        </button>
-        <input type="file" accept="image/*" capture="environment" id="fileCamera" hidden />
-        <input type="file" accept="image/*" id="fileLibrary" hidden />
+      <div class="dropzone" id="dropzone">
+        <div class="photo-row">
+          <button class="photo-btn" id="btnCamera">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.3"/></svg>
+            Take photo
+          </button>
+          <button class="photo-btn" id="btnLibrary">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 3.5 3.5L16.5 11 20 14.5"/></svg>
+            From library
+          </button>
+          <input type="file" accept="image/*" capture="environment" id="fileCamera" hidden />
+          <input type="file" accept="image/*" id="fileLibrary" hidden />
+        </div>
+        <p class="drop-hint" id="dropHint">or drag &amp; drop a receipt image here</p>
+        <div id="photoPreviewWrap"></div>
       </div>
-      <div id="photoPreviewWrap"></div>
 
       <div class="field">
         <label for="inClient">Client / Project</label>
@@ -452,6 +472,34 @@
   $('btnLibrary').addEventListener('click', ()=> $('fileLibrary').click());
   $('fileCamera').addEventListener('change', e => handleFile(e.target.files[0]));
   $('fileLibrary').addEventListener('change', e => handleFile(e.target.files[0]));
+
+  // Stop the browser from navigating away if a file is dropped outside the dropzone
+  ['dragover','drop'].forEach(evt => {
+    window.addEventListener(evt, e => e.preventDefault());
+  });
+
+  const dropzone = $('dropzone');
+  ['dragenter','dragover'].forEach(evt => {
+    dropzone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropzone.classList.add('drag-over');
+    });
+  });
+  ['dragleave','dragend'].forEach(evt => {
+    dropzone.addEventListener(evt, e => {
+      if(evt === 'dragleave' && dropzone.contains(e.relatedTarget)) return;
+      dropzone.classList.remove('drag-over');
+    });
+  });
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if(!files || !files.length) return;
+    const imageFile = Array.from(files).find(f => f.type.startsWith('image/'));
+    if(!imageFile){ toast('That file isn\'t an image — drop a photo of the receipt.'); return; }
+    handleFile(imageFile);
+  });
 
   function handleFile(file){
     if(!file) return;
