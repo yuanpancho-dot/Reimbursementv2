@@ -590,6 +590,10 @@
   function peso(n){
     return '₱' + Number(n||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
   }
+  function pesoPdf(n){
+    // jsPDF's standard fonts don't include the ₱ glyph (renders as a stray ±), so use "PHP" in PDFs
+    return 'PHP ' + Number(n||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
 
   // ---------- tabs ----------
   const titles = { new: 'New expense', history: 'My expenses', report: 'Reimbursement report', instructions: 'Filing notes' };
@@ -951,38 +955,60 @@
       if(y + h > pageH - margin){ doc.addPage(); y = margin; }
     }
 
+    const days = groupByDay(items);
+    const cats = groupByCategory(items);
+    const grand = items.reduce((s,x)=>s+x.amount,0);
+
+    // ---- Page 1: summary ----
     doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...ink);
     doc.text('Reimbursement Report', margin, y); y += 22;
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...inkSoft);
     doc.text(`Period: ${$('rFrom').value || '—'}  to  ${$('rTo').value || '—'}`, margin, y); y += 14;
-    doc.text(`Generated: ${new Date().toLocaleString('en-PH')}`, margin, y); y += 22;
+    doc.text(`Generated: ${new Date().toLocaleString('en-PH')}`, margin, y); y += 24;
+    doc.setDrawColor(217,212,198); doc.line(margin, y, pageW-margin, y); y += 22;
+
+    // total for period
+    doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(...inkSoft);
+    doc.text('Total Amount for the Period', margin, y); y += 20;
+    doc.setFont('helvetica','bold'); doc.setFontSize(22); doc.setTextColor(...forest);
+    doc.text(pesoPdf(grand), margin, y); y += 16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...inkSoft);
+    doc.text(`${items.length} receipt${items.length===1?'':'s'} across ${days.length} day${days.length===1?'':'s'}`, margin, y); y += 26;
     doc.setDrawColor(217,212,198); doc.line(margin, y, pageW-margin, y); y += 20;
 
     // category summary
-    const cats = groupByCategory(items);
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...ink);
     doc.text('By category', margin, y); y += 16;
     doc.setFont('helvetica','normal'); doc.setFontSize(10);
     cats.forEach(c => {
       doc.setTextColor(...inkSoft); doc.text(c.cat, margin, y);
-      doc.setTextColor(...ink); doc.text(peso(c.total), pageW - margin, y, {align:'right'});
-      y += 14;
+      doc.setTextColor(...ink); doc.text(pesoPdf(c.total), pageW - margin, y, {align:'right'});
+      y += 15;
     });
-    y += 10;
-    doc.setDrawColor(217,212,198); doc.line(margin, y, pageW-margin, y); y += 20;
 
-    const days = groupByDay(items);
-    const grand = items.reduce((s,x)=>s+x.amount,0);
+    // ---- Day-by-day detail starts fresh, so the summary above stays a clean page 1 ----
+    doc.addPage(); y = margin;
 
     for(const day of days){
-      ensureSpace(30);
-      doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...forest);
-      doc.text(formatDate(day.date), margin, y);
+      ensureSpace(34);
+      doc.setFont('times','bold'); doc.setFontSize(13); doc.setTextColor(...ink);
+      doc.text(formatDateLong(day.date), margin, y);
       doc.setFont('helvetica','bold'); doc.setFontSize(12);
-      doc.text(peso(day.total), pageW - margin, y, {align:'right'});
+      doc.text(pesoPdf(day.total), pageW - margin, y, {align:'right'});
       y += 16;
       doc.setDrawColor(217,212,198); doc.line(margin, y, pageW-margin, y); y += 14;
 
+      // category breakdown for the day (mirrors the Report tab)
+      const dayCats = groupByCategory(day.items);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      dayCats.forEach(c => {
+        doc.setTextColor(...inkSoft); doc.text(c.cat, margin + 8, y);
+        doc.setTextColor(...ink); doc.text(pesoPdf(c.total), pageW - margin, y, {align:'right'});
+        y += 13;
+      });
+      y += 6;
+
+      // itemized entries with photos, for proof
       for(const x of day.items){
         const imgH = x.photo ? 130 : 0;
         ensureSpace(58 + imgH);
@@ -990,7 +1016,7 @@
         doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...ink);
         doc.text(x.client, margin, y);
         doc.setFont('helvetica','bold'); doc.setFontSize(11);
-        doc.text(peso(x.amount), pageW - margin, y, {align:'right'});
+        doc.text(pesoPdf(x.amount), pageW - margin, y, {align:'right'});
         y += 13;
 
         doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...forest);
@@ -1022,12 +1048,6 @@
       }
       y += 8;
     }
-
-    ensureSpace(40);
-    doc.setDrawColor(...ink); doc.setLineWidth(1); doc.line(margin, y, pageW-margin, y); y += 20;
-    doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(...ink);
-    doc.text('Total reimbursement', margin, y);
-    doc.text(peso(grand), pageW - margin, y, {align:'right'});
 
     const filename = `reimbursement-report-${$('rFrom').value}-to-${$('rTo').value}.pdf`;
     return { doc, filename };
