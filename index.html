@@ -253,6 +253,45 @@
   .empty{
     text-align:center; padding: 60px 20px; color: var(--ink-soft);
   }
+  .hist-table-wrap{
+    overflow-x:auto;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--card);
+  }
+  table.hist-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.hist-table th{
+    text-align:left;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing:0.03em;
+    color: var(--ink-soft);
+    background: var(--paper-light);
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--line);
+    white-space:nowrap;
+  }
+  table.hist-table td{
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+    white-space:nowrap;
+  }
+  table.hist-table tr:last-child td{ border-bottom:none; }
+  table.hist-table td.acct-cell{
+    max-width: 120px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  table.hist-table td.amt{ font-family:'IBM Plex Mono', monospace; text-align:right; }
+  table.hist-table td.photo-cell{ text-align:center; }
+  .photo-yes{ color: var(--forest); font-weight:600; font-size:11.5px; }
+  .photo-no{ color: var(--ink-soft); }
+  .row-del{
+    background:none; border:none; color: var(--stamp);
+    font-size:13px; font-weight:600; cursor:pointer; padding:2px 4px;
+  }
   .empty .mark{ font-family:'Source Serif 4', serif; font-size:20px; color: var(--ink); margin-bottom:8px; }
   .empty p{ font-size: 13.5px; line-height:1.5; margin:0; }
 
@@ -535,19 +574,84 @@
     });
   }
 
-  // ---------- storage ----------
-  async function loadExpenses(){
+  // ---------- storage (IndexedDB — no small size ceiling like localStorage) ----------
+  const DB_NAME = 'reimbursement_db';
+  const STORE = 'expenses';
+  let dbPromise = null;
+
+  function openDb(){
+    if(dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject)=>{
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath:'id' });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return dbPromise;
+  }
+  async function dbGetAll(){
+    const db = await openDb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function dbPut(rec){
+    const db = await openDb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(rec);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function dbDelete(id){
+    const db = await openDb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function dbClearAndBulkPut(records){
+    const db = await openDb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, 'readwrite');
+      const store = tx.objectStore(STORE);
+      store.clear();
+      records.forEach(r => store.put(r));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  // one-time: pull over anything saved under the old localStorage scheme
+  async function migrateFromLocalStorageIfNeeded(){
     try{
+      if(localStorage.getItem('migrated_to_indexeddb')) return;
       const idxRaw = localStorage.getItem('expense_ids');
-      const ids = idxRaw ? JSON.parse(idxRaw) : [];
-      const items = [];
-      for(const id of ids){
-        const raw = localStorage.getItem('expense_' + id);
-        if(raw){
-          try{ items.push(JSON.parse(raw)); }
-          catch(e){ /* corrupt record, skip */ }
+      if(idxRaw){
+        const ids = JSON.parse(idxRaw);
+        for(const id of ids){
+          const raw = localStorage.getItem('expense_' + id);
+          if(raw){
+            try{ await dbPut(JSON.parse(raw)); }catch(e){ /* skip corrupt record */ }
+          }
         }
       }
+      localStorage.setItem('migrated_to_indexeddb', '1');
+    }catch(err){ /* best effort */ }
+  }
+
+  async function loadExpenses(){
+    try{
+      const items = await dbGetAll();
       items.sort((a,b)=> (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
       state.expenses = items;
     }catch(err){
@@ -556,21 +660,11 @@
   }
 
   async function saveExpense(rec){
-    const idxRaw = localStorage.getItem('expense_ids');
-    let ids = idxRaw ? JSON.parse(idxRaw) : [];
-    ids.push(rec.id);
-    localStorage.setItem('expense_' + rec.id, JSON.stringify(rec));
-    localStorage.setItem('expense_ids', JSON.stringify(ids));
+    await dbPut(rec);
   }
 
   async function deleteExpense(id){
-    try{
-      const idxRaw = localStorage.getItem('expense_ids');
-      let ids = idxRaw ? JSON.parse(idxRaw) : [];
-      ids = ids.filter(x => x !== id);
-      localStorage.setItem('expense_ids', JSON.stringify(ids));
-      localStorage.removeItem('expense_' + id);
-    }catch(err){ /* best effort */ }
+    try{ await dbDelete(id); }catch(err){ /* best effort */ }
     await loadExpenses();
     renderHistory();
     renderReportPreview();
@@ -623,28 +717,36 @@
     if(!state.expenses.length){
       wrap.innerHTML = `<div class="empty">
         <div class="mark">No expenses yet</div>
-        <p>Entries you save will show up here as receipt slips, newest first.</p>
+        <p>Entries you save will show up here, newest first.</p>
       </div>`;
       return;
     }
-    wrap.innerHTML = state.expenses.map(x => `
-      <div class="slip">
-        <div class="row1">
-          <div>
-            <div class="client">${escapeHtml(x.client)}</div>
-            <div class="date">${formatDate(x.date)}</div>
-          </div>
-          <div class="amount">${peso(x.amount)}</div>
-        </div>
-        ${x.notes ? `<div class="notes">${escapeHtml(x.notes)}</div>` : ''}
-        ${x.photo ? `<img class="thumb" src="${x.photo}" alt="Receipt" />` : ''}
-        <div>
-          ${x.category ? `<span class="cat">${escapeHtml(x.category)}</span>` : ''}
-          <button class="del" data-id="${x.id}">Delete</button>
-        </div>
-      </div>
-    `).join('');
-    wrap.querySelectorAll('.del').forEach(b=>{
+    const total = state.expenses.reduce((s,x)=>s+x.amount,0);
+    const dates = state.expenses.map(x=>x.date).sort();
+    const from = dates[0], to = dates[dates.length-1];
+
+    let html = `<div class="summary-box">
+      <div class="label">Running total</div>
+      <div class="total">${peso(total)}</div>
+      <div class="count">${state.expenses.length} entr${state.expenses.length===1?'y':'ies'} · ${formatDateShort(from)} – ${formatDateShort(to)}</div>
+    </div>`;
+
+    html += `<div class="hist-table-wrap"><table class="hist-table">
+      <thead><tr><th>Date</th><th>Account</th><th>Amount</th><th>Photo</th><th></th></tr></thead>
+      <tbody>`;
+    state.expenses.forEach(x => {
+      html += `<tr>
+        <td>${formatDateShort(x.date)}</td>
+        <td class="acct-cell">${escapeHtml(x.client)}</td>
+        <td class="amt">${peso(x.amount)}</td>
+        <td class="photo-cell">${x.photo ? '<span class="photo-yes">Yes</span>' : '<span class="photo-no">—</span>'}</td>
+        <td><button class="row-del" data-id="${x.id}" aria-label="Delete entry">✕</button></td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('.row-del').forEach(b=>{
       b.addEventListener('click', ()=> deleteExpense(b.dataset.id));
     });
   }
@@ -652,6 +754,10 @@
   function formatDate(d){
     const dt = new Date(d + 'T00:00:00');
     return dt.toLocaleDateString('en-PH', {weekday:'short', year:'numeric', month:'short', day:'numeric'});
+  }
+  function formatDateShort(d){
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('en-PH', {month:'short', day:'numeric'});
   }
   function escapeHtml(s){
     return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1038,8 +1144,7 @@
       const expenses = data.expenses || [];
       const ok = confirm(`Restore ${expenses.length} expense(s) from Drive? This replaces what's currently on this device.`);
       if(ok){
-        localStorage.setItem('expense_ids', JSON.stringify(expenses.map(x => x.id)));
-        expenses.forEach(x => localStorage.setItem('expense_' + x.id, JSON.stringify(x)));
+        await dbClearAndBulkPut(expenses);
         await loadExpenses();
         renderHistory();
         renderReportPreview();
@@ -1061,6 +1166,7 @@
 
   // ---------- init ----------
   (async function init(){
+    await migrateFromLocalStorageIfNeeded();
     await loadExpenses();
     await loadClientId();
     updateDriveStatus();
